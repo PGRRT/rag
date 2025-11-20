@@ -1,0 +1,6 @@
+server:
+  port: 8080
+eureka:
+  client:
+    service-url:
+      defaultZone: http://${EUREKA_USERNAME}:${EUREKA_PASSWORD}@eureka:8761/eureka/

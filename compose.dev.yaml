@@ -1,0 +1,245 @@
+services:
+  frontend:
+    container_name: frontend
+    build:
+      context: ./frontend
+      dockerfile: docker/dev.Dockerfile
+
+    environment:
+      WATCHPACK_POLLING: true
+      CHOKIDAR_USEPOLLING: true
+    init: true
+    env_file:
+      - .env
+      - .env.dev.local
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
+    restart: unless-stopped
+    ports:
+      - 5173:5173
+    networks:
+      - app_network
+    # depends_on:
+    #   gateway:
+    #     condition: service_healthy
+    #   user-service:
+    #     condition: service_healthy
+    #   chat-service:
+    #     condition: service_healthy
+    
+  api:
+    container_name: api
+    build:
+      context: ./api
+      dockerfile: docker/devPure.Dockerfile
+    env_file:
+        - .env
+        - .env.dev.local
+    ports:
+      - 9000:9000
+    volumes:
+      - ./api:/app
+    environment:
+      - WATCHFILES_FORCE_POLLING=1  # This forces file watching (solves issues with hot reloading on windows)
+      - WATCHFILES_POLLING_INTERVAL=1  # Check every 1 second
+      - PYTHONUNBUFFERED=1
+      - PYTHONPATH=/app/app
+
+      # ✅ GPU environment variables
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      # ✅ Force TensorFlow to use GPU
+      - CUDA_VISIBLE_DEVICES=0
+    networks:
+      - app_network
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [ gpu ]
+    restart: unless-stopped
+    
+  eureka:
+    container_name: eureka
+    build:
+      context: ./backend/eureka
+      dockerfile: docker/dev.Dockerfile
+    env_file:
+      - .env
+      - .env.dev.local
+    ports:
+      - 8761:8761
+    volumes:
+      - ./backend/eureka:/app
+      - ~/.m2:/root/.m2
+    networks:
+      - app_network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8761/actuator/health || exit 1"]
+      interval: 10s
+      retries: 10
+      start_period: 30s
+      timeout: 5s
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  user-service:
+    container_name: user-service
+    build:
+      context: ./backend/user-service
+      dockerfile: docker/dev.Dockerfile
+    env_file:
+      - .env
+      - .env.dev.local
+    ports:
+      - 8081:8081
+    volumes:
+      - ./backend/user-service:/app
+      - ~/.m2:/root/.m2
+    networks:
+      - app_network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8081/actuator/health || exit 1"]
+      interval: 10s
+      retries: 10
+      start_period: 30s
+      timeout: 5s
+    depends_on:
+      eureka:
+        condition: service_healthy
+      # redis:
+      #   condition: service_healthy 
+  chat-service:
+    container_name: chat-service
+    build:
+      context: ./backend/chat-service
+      dockerfile: docker/dev.Dockerfile
+    env_file:
+      - .env
+      - .env.dev.local
+    ports:
+      - 8082:8082
+    volumes:
+      - ./backend/chat-service:/app
+      - ~/.m2:/root/.m2
+    networks:
+      - app_network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8082/actuator/health || exit 1"]
+      interval: 10s
+      retries: 10
+      start_period: 30s
+      timeout: 5s
+    depends_on:
+      eureka:
+        condition: service_healthy
+      # redis:
+      #   condition: service_healthy   
+
+  gateway:
+    container_name: gateway
+    build:
+      context: ./backend/gateway
+      dockerfile: docker/dev.Dockerfile
+    env_file:
+      - .env
+      - .env.dev.local
+    ports:
+      - 8080:8080
+    volumes:
+      - ./backend/gateway:/app
+      - ~/.m2:/root/.m2
+    networks:
+      - app_network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/actuator/health || exit 1"]
+      interval: 10s
+      retries: 10
+      start_period: 30s
+      timeout: 5s
+    depends_on:
+      - chat-service
+      - user-service
+
+      # chat-service:
+        # condition: service_healthy
+      # user-service:
+        # condition: service_healthy
+  
+    # PostgreSQL container shared by multiple microservices:
+    # - user-service uses database 'userdb'
+    # - chat-service uses database 'chatdb'
+    # This saves resources in development and testing environments
+    # while keeping each service's data logically separated.asd
+  db:
+    container_name: db
+    image: 'postgres:17'
+    restart: unless-stopped
+    env_file:
+      - .env
+      - .env.dev.local
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      interval: 10s
+      retries: 10
+      timeout: 5s
+    ports:
+      - '5432:5432'
+    volumes:
+      - "pgdata:/var/lib/postgresql/data"
+      - ./backend/docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - app_network
+
+  # redis:
+  #   container_name: redis
+  #   image: redis:8.0-alpine
+  #   restart: unless-stopped
+  #   ports:
+  #     - "6379:6379"
+  #   env_file:
+  #    - .env
+  #    - .env.dev.local
+  #   command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+  #   networks:
+  #     - app_network
+  #   healthcheck:
+  #     test: ["CMD", "redis-cli", "ping"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 10
+  #     start_period: 5s
+
+  rabbitmq:
+    container_name: rabbitmq
+    image: rabbitmq:4.2-alpine
+    restart: unless-stopped
+    env_file:
+      - .env
+      - .env.dev.local
+    healthcheck:
+      test: ["CMD", "rabbitmqctl", "status"]
+      interval: 10s
+      retries: 10
+      timeout: 5s
+    ports:
+      - "5672:5672"
+    networks:
+      - app_network
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+
+volumes:
+  pgdata:
+  rabbitmq-data:
+# Define a network, which allows containers to communicate
+# with each other, by using their container name as a hostname
+networks:
+  app_network:
+    driver: bridge
