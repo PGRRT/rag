@@ -3,7 +3,7 @@ name: Pre-commit checks
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main,dev]
 
 jobs:
   pre-commit:
@@ -12,6 +12,13 @@ jobs:
       # 1 checkout
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Clearing as much disk space as possible
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQ
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+          sudo docker image prune --all --force
+          sudo docker builder prune -a
 
       # intialize python
       - name: Set up Python
@@ -24,17 +31,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install pre-commit
-          pip install pytest
           pip install -r api/requirements.txt
-
-      # cache
-      - name: Setup pre-commit cache
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pre-commit
-          key: ${{ runner.os }}-precommit-${{ hashFiles('.pre-commit-config.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-precommit-
 
       # run pre-commit checks again
       - name: Run pre-commit hooks

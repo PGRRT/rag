@@ -1,0 +1,55 @@
+package com.example.chat.domain.entities;
+
+import com.example.chat.domain.enums.ChatType;
+import jakarta.persistence.*;
+import jakarta.validation.constraints.AssertTrue;
+import lombok.*;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+
+import java.time.LocalDateTime;
+import java.util.*;
+
+@Entity
+@Table(name = "chats")
+@NoArgsConstructor
+@AllArgsConstructor
+@Getter
+@Setter
+@Builder
+@EntityListeners(AuditingEntityListener.class)
+public class Chat extends BaseClass<UUID> {
+    @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
+
+    // Application will have also global chats that does not require user association
+    @Column(name="user_id")
+    private UUID userId;
+
+    @Column(nullable = false)
+    private String title;
+
+    @Column(nullable = false)
+    @Enumerated(EnumType.STRING)
+    private ChatType chatType;
+
+    @Builder.Default
+    @OneToMany(mappedBy = "chat", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    List<Message> messages = new ArrayList<>();
+
+    @CreatedDate
+    @Column(nullable = false, updatable = false)
+    private LocalDateTime createdAt;
+
+    @LastModifiedDate
+    @Column(nullable = false)
+    private LocalDateTime updatedAt;
+
+    @AssertTrue(message = "userId must be set for PRIVATE chats and null for GLOBAL chats")
+    private boolean isUserIdValid() {
+        return (chatType == ChatType.PRIVATE && userId != null) ||
+                (chatType == ChatType.GLOBAL && userId == null);
+    }
+}
