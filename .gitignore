@@ -2,3 +2,4 @@
 .venv
 .idea
 volumes
+__pycache__

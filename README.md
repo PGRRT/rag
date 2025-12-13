@@ -4,7 +4,6 @@
 ```bash
 sudo docker compose up -d
 ```
-
 Milvus WebUI URL: http://127.0.0.1:9091/webui/
 
 ### Python
@@ -14,3 +13,7 @@ python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 ```
+
+# RAG Informations
+
+Polish Information Retrieval Benchmark: https://huggingface.co/spaces/sdadas/pirb

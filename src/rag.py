@@ -1,24 +1,14 @@
-import uuid
-from typing import Any
 from typing_extensions import override
 from abc import ABC, abstractmethod
 from uuid import UUID
-from transformers import DPRQuestionEncoder, DPRContextEncoder, DPRQuestionEncoderTokenizer
-from transformers.utils import logging
+from sentence_transformers import SentenceTransformer
 from dotenv import load_dotenv
 import os
-import time
-import torch
-import torch.nn.functional as F
-from tqdm import tqdm
 
 from document import Document, DocumentLoaderFactory
 from vector_database import VectorDatabase
 from llm_client import LLM
 from llm_client import BielikLLM
-
-
-logging.set_verbosity_debug()
 
 
 class RAG(ABC):
@@ -43,15 +33,17 @@ class MockRAG(RAG):
 
 class ClassicRAG(RAG):
     def __init__(self, llm: LLM):
-        self.client = VectorDatabase(embedding_dim=768)
+        self.client = VectorDatabase(embedding_dim=1024)
         self.llm = llm
-        self.question_encoder = DPRQuestionEncoder.from_pretrained("facebook/dpr-question_encoder-single-nq-base")
-        self.context_encoder = DPRContextEncoder.from_pretrained("facebook/dpr-ctx_encoder-single-nq-base")
-        self.tokenizer = DPRQuestionEncoderTokenizer.from_pretrained("facebook/dpr-question_encoder-single-nq-base")
+        print("Loading encoder...")
+        self.encoder = SentenceTransformer(
+    "sdadas/stella-pl-retrieval-mini-8k",
+                    trust_remote_code=True,
+                    device="cuda"
+        )
+        print("Encoder loaded!")
+        self.encoder.bfloat16()
         self.chunk_size = 100
-
-        self.question_encoder.eval() # Evaluation mode on
-        self.context_encoder.eval() # Evaluation mode on
 
 
     @override
@@ -74,25 +66,15 @@ class ClassicRAG(RAG):
 
 
     def __get_chunks_embeddings(self, chunks, batch_size=16):
-        embeddings = []
+        embeddings = self.encoder.encode(
+            sentences=chunks,
+            batch_size=batch_size,
+            convert_to_tensor=True,
+            show_progress_bar=True,
+            normalize_embeddings=True
+        )
 
-        for i in tqdm(range(0, len(chunks), batch_size), desc="Generating embeddings"):
-            batch = chunks[i:i + batch_size]
-
-            inputs = self.tokenizer(
-                batch,
-                return_tensors="pt",
-                padding=True,
-            )
-
-            with torch.no_grad():
-                emb = self.context_encoder(**inputs).pooler_output  # [B, 768]
-
-            emb = F.normalize(emb, p=2, dim=1)
-
-            embeddings.append(emb)
-
-        return torch.cat(embeddings, dim=0)
+        return embeddings
 
 
     def __get_chunks_with_embeddings(self, text, batch_size=16):
@@ -117,19 +99,14 @@ class ClassicRAG(RAG):
 
 
     def __get_query_embedding(self, query: str):
-        inputs = self.tokenizer(
-                query,
-                return_tensors="pt",
-                padding=True,
-                truncation=True,
+        embedding = self.encoder.encode(
+            sentences=query,
+            convert_to_tensor=True,
+            show_progress_bar=True,
+            normalize_embeddings=True
         )
 
-        with torch.no_grad():
-            emb = self.question_encoder(**inputs).pooler_output
-
-        emb = F.normalize(emb, p=2, dim=1)
-
-        return emb.tolist()
+        return [embedding.tolist()] # Milvus require list[list]
 
 
     def __create_prompt(self, query: str, contexts: list):
@@ -149,4 +126,9 @@ if __name__ == "__main__":
 
     rag = ClassicRAG(bielik)
 
-    print(rag.process_query("Ile lat ma 5 letni pies?", 1234))
+    document = DocumentLoaderFactory.load("../requirements.txt")
+    rag.process_document(document, conversation_id=1234)
+
+    response = rag.process_query("PyTorch", 1234)
+    print(response)
+    rag.client.remove_collection(1234)

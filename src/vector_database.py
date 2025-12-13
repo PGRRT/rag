@@ -118,7 +118,7 @@ class VectorDatabase:
         self.client.flush(collection_name)
 
     def search(
-        self, conversation_id: UUID, query_embedding: list[int]
+        self, conversation_id: UUID, query_embedding: list[list[float]]
     ) -> list[list[dict[Any, Any]]]:
         """
         This function searches for similar data in the vector database.
