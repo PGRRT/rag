@@ -9,7 +9,8 @@ class VectorDatabase:
     def __init__(self, embedding_dim: int = 768):
         # self.client: MilvusClient = MilvusClient(host="standalone",  port=19530)
         self.client = MilvusClient(
-            uri="tcp://standalone:19530"   # <--- to JEDYNE które działa
+            uri="http://localhost:19530",
+            token="root:Milvus"
         )
         self.embedding_dim: int = embedding_dim
 
@@ -155,3 +156,7 @@ class VectorDatabase:
             self.client.release_collection(collection_name)
 
         return results
+
+
+if __name__ == "__main__":
+    vector_database = VectorDatabase()
