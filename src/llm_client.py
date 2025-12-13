@@ -138,10 +138,6 @@ class BielikLLM(LLM):
 
 
 if __name__ == "__main__":
-    # openai = OpenAILLM()
-    # prompt = "What is your name?"
-    # openai.generate_response(prompt)
-
     load_dotenv()
 
     bielik = BielikLLM(
