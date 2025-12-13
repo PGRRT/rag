@@ -1,0 +1,15 @@
+openai==2.11.0
+python-dotenv==1.2.1
+httpx==0.28.1
+pymilvus==2.6.5
+transformers==4.57.3
+
+# PyTorch CPU
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch
+torchvision
+
+# PyTorch with CUDA 13.0
+#--index-url https://download.pytorch.org/whl/cu130
+#torch
+#torchvision
