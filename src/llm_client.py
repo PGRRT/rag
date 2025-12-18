@@ -99,7 +99,7 @@ class BielikLLM(LLM):
         api_url: str,
         username: str,
         password: str,
-        max_response_length: int = 4096,
+        max_response_length: int = 4192,
         temperature: float = 0.0,
     ) -> None:
         self.client = httpx.Client(auth=(username, password), verify=False)

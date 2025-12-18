@@ -41,7 +41,7 @@ class ClassicRAG(RAG):
         self.encoder = SentenceTransformer(
     "sdadas/stella-pl-retrieval-mini-8k",
                     trust_remote_code=True,
-                    device="cuda"
+                    device="cuda",
         )
         print("Encoder loaded!")
         self.encoder.bfloat16()
@@ -93,10 +93,8 @@ class ClassicRAG(RAG):
         query_embedding = self.__get_query_embedding(query)
         contexts = self.client.search(conversation_id, query_embedding)
         reranked_contexts = self.__rerank(contexts, query)
-
-        print(reranked_contexts)
-
         prompt = self.__create_prompt(query, reranked_contexts)
+        print(prompt)
         response = self.llm.generate_response(prompt)
 
         return response
@@ -113,7 +111,7 @@ class ClassicRAG(RAG):
         return [embedding.tolist()] # Milvus require list[list]
 
 
-    def __rerank(self, contexts: list[str], query: str, top_k: int = 4) -> list[str]:
+    def __rerank(self, contexts: list[str], query: str, top_k: int = 2) -> list[str]:
         print("Loading crossencoder...")
         model = CrossEncoder(
             "sdadas/polish-reranker-roberta-v3",
@@ -121,7 +119,7 @@ class ClassicRAG(RAG):
             max_length=8192,
             device="cuda",
             trust_remote_code=True,
-            model_kwargs={"dtype": torch.bfloat16, "attn_implementation": "eager"}
+            model_kwargs={"dtype": torch.bfloat16}
         )
         print("Crossencoder loaded!")
 
@@ -138,7 +136,9 @@ class ClassicRAG(RAG):
 
 
     def __create_prompt(self, query: str, contexts: list):
-        contexts = "\n".join(contexts)
+        for i in range(len(contexts)):
+            contexts[i] = f"\n<zrodlo>{contexts[i]}</zrodlo>"
+        contexts = "".join(contexts)
 
         return f"""Pytanie użytkownika: "{query}"\nŹródła wymienione przez użytkownika: "{contexts}"\n"""
 

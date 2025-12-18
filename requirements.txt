@@ -4,6 +4,7 @@ httpx==0.28.1
 pymilvus==2.6.5
 transformers==4.57.3
 sentence-transformers==5.2.0
+datasets==4.4.1
 tqdm==4.67.1
 
 # PyTorch CPU
