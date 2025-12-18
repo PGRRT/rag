@@ -119,7 +119,7 @@ class VectorDatabase:
 
     def search(
         self, conversation_id: UUID, query_embedding: list[list[float]]
-    ) -> list[list[dict[Any, Any]]]:
+    ) -> list[str]:
         """
         This function searches for similar data in the vector database.
 
@@ -146,7 +146,7 @@ class VectorDatabase:
                 anns_field="embedding",
                 data=query_embedding,
                 search_params=search_params,
-                limit=5,
+                limit=80,
                 output_fields=["text"],
             )
 

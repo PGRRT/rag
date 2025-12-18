@@ -4,11 +4,13 @@ from uuid import UUID
 from sentence_transformers import SentenceTransformer
 from dotenv import load_dotenv
 import os
+import torch.nn
+from sentence_transformers import CrossEncoder
 
-from document import Document, DocumentLoaderFactory
-from vector_database import VectorDatabase
-from llm_client import LLM
-from llm_client import BielikLLM
+from .document import Document, DocumentLoaderFactory
+from .vector_database import VectorDatabase
+from .llm_client import LLM
+from .llm_client import BielikLLM
 
 
 class RAG(ABC):
@@ -43,7 +45,7 @@ class ClassicRAG(RAG):
         )
         print("Encoder loaded!")
         self.encoder.bfloat16()
-        self.chunk_size = 100
+        self.chunk_size = 420
 
 
     @override
@@ -65,7 +67,7 @@ class ClassicRAG(RAG):
         return chunks
 
 
-    def __get_chunks_embeddings(self, chunks, batch_size=16):
+    def __get_chunks_embeddings(self, chunks, batch_size=8):
         embeddings = self.encoder.encode(
             sentences=chunks,
             batch_size=batch_size,
@@ -77,7 +79,7 @@ class ClassicRAG(RAG):
         return embeddings
 
 
-    def __get_chunks_with_embeddings(self, text, batch_size=16):
+    def __get_chunks_with_embeddings(self, text, batch_size=8):
         chunks = self.__text_splitter(text)
         embeddings = self.__get_chunks_embeddings(chunks, batch_size=batch_size)
 
@@ -87,12 +89,14 @@ class ClassicRAG(RAG):
 
 
     @override
-    def process_query(self, query: str, conversation_id: UUID) -> str:
-        base_conversation_id = 1234 # Nwm jakis cwel na frontendzie wymyslil sobie chaty, mimo ze tego nie potrzebujemy teraz
-
+    def process_query(self, query: str, conversation_id: UUID = 0) -> str:
         query_embedding = self.__get_query_embedding(query)
-        contexts = self.client.search(base_conversation_id, query_embedding)
-        prompt = self.__create_prompt(query, contexts)
+        contexts = self.client.search(conversation_id, query_embedding)
+        reranked_contexts = self.__rerank(contexts, query)
+
+        print(reranked_contexts)
+
+        prompt = self.__create_prompt(query, reranked_contexts)
         response = self.llm.generate_response(prompt)
 
         return response
@@ -107,6 +111,30 @@ class ClassicRAG(RAG):
         )
 
         return [embedding.tolist()] # Milvus require list[list]
+
+
+    def __rerank(self, contexts: list[str], query: str, top_k: int = 4) -> list[str]:
+        print("Loading crossencoder...")
+        model = CrossEncoder(
+            "sdadas/polish-reranker-roberta-v3",
+            activation_fn=torch.nn.Identity(),
+            max_length=8192,
+            device="cuda",
+            trust_remote_code=True,
+            model_kwargs={"dtype": torch.bfloat16, "attn_implementation": "eager"}
+        )
+        print("Crossencoder loaded!")
+
+        results = model.predict([[query, answer] for answer in contexts])
+        reranked = [
+            ctx for ctx, _ in sorted(
+                zip(contexts, results),
+                key=lambda x: x[1],
+                reverse=True
+            )
+        ]
+
+        return reranked[:top_k]
 
 
     def __create_prompt(self, query: str, contexts: list):
