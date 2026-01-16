@@ -45,6 +45,17 @@ class ClassicRAG(RAG):
         )
         print("Encoder loaded!")
         self.encoder.bfloat16()
+
+        print("Loading crossencoder...")
+        self.crossencoder = CrossEncoder(
+            "sdadas/polish-reranker-roberta-v3",
+            activation_fn=torch.nn.Identity(),
+            max_length=8192,
+            device="cuda",
+            trust_remote_code=True,
+            model_kwargs={"dtype": torch.bfloat16}
+        )
+        print("Crossencoder loaded!")
         self.chunk_size = 420
 
 
@@ -96,8 +107,20 @@ class ClassicRAG(RAG):
         prompt = self.__create_prompt(query, reranked_contexts)
         print(prompt)
         response = self.llm.generate_response(prompt)
+        torch.cuda.empty_cache()
 
         return response
+
+    def process_query_evaluate(self, query: str, conversation_id: UUID = 0) -> dict:
+        query_embedding = self.__get_query_embedding(query)
+        contexts = self.client.search(conversation_id, query_embedding)
+        reranked_contexts = self.__rerank(contexts, query)
+        prompt = self.__create_prompt(query, reranked_contexts)
+        print(prompt)
+        response = self.llm.generate_response(prompt)
+        torch.cuda.empty_cache()
+
+        return {"response": response, "contexts": reranked_contexts}
 
 
     def __get_query_embedding(self, query: str):
@@ -111,19 +134,9 @@ class ClassicRAG(RAG):
         return [embedding.tolist()] # Milvus require list[list]
 
 
-    def __rerank(self, contexts: list[str], query: str, top_k: int = 2) -> list[str]:
-        print("Loading crossencoder...")
-        model = CrossEncoder(
-            "sdadas/polish-reranker-roberta-v3",
-            activation_fn=torch.nn.Identity(),
-            max_length=8192,
-            device="cuda",
-            trust_remote_code=True,
-            model_kwargs={"dtype": torch.bfloat16}
-        )
-        print("Crossencoder loaded!")
-
-        results = model.predict([[query, answer] for answer in contexts])
+    def __rerank(self, contexts: list[str], query: str, top_k: int = 5) -> list[str]:
+        with torch.no_grad():
+            results = self.crossencoder.predict([[query, answer] for answer in contexts])
         reranked = [
             ctx for ctx, _ in sorted(
                 zip(contexts, results),
