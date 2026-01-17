@@ -11,7 +11,7 @@ class LLM(ABC):
     def generate_response(self, prompt: str) -> str:
         pass
 
-    system_prompt = ("""Odpowiadaj na pytania użytkownika dotyczące fragmentow źródeł danych wymienionych w wiadomości.
+    system_prompt = ("""Odpowiadaj na pytania użytkownika wymienione w wiadomości.
 Przykład:
 
 Pytanie użytkownika: “Potrzebuję danych dotyczących migracji ludności w UE po 2015 roku.”

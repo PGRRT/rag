@@ -20,7 +20,7 @@ bielik = BielikLLM(
 )
 
 chatgpt = OpenAILLM()
-rag = ClassicRAG(chatgpt)
+rag = ClassicRAG(bielik)
 
 #
 # def load_documents_to_chatbot(folder_path: str, chatbot: ClassicRAG,
@@ -36,18 +36,22 @@ rag = ClassicRAG(chatgpt)
 #             total += 1
 #             rag.process_document(document, conversation_id)
 #             print(f"Processed {total} documents from {len(os.listdir(folder_path))}.")
-
-
+#
+#
 # load_documents_to_chatbot(
 #     folder_path="data",
 #     chatbot=rag,
 #     conversation_id=0
 # )
 
-# torch.cuda.empty_cache()
-response = rag.process_query_evaluate("Co to COVID-19?", 0)
-print(response)
 
-# rag.client.remove_collection(0)
+
+
+
+# torch.cuda.empty_cache()
+# response = rag.process_query_evaluate("Co to COVID?", 0)
+# print(response)
+
+#rag.client.remove_collection(0)
 
 # dataset = load_dataset()

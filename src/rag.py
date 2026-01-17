@@ -56,7 +56,7 @@ class ClassicRAG(RAG):
             model_kwargs={"dtype": torch.bfloat16}
         )
         print("Crossencoder loaded!")
-        self.chunk_size = 420
+        self.chunk_size = 67
 
 
     @override
