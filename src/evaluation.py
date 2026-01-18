@@ -78,24 +78,72 @@
 
 
 
+#
+# from ragchecker import RAGResults, RAGChecker
+# from ragchecker.metrics import all_metrics
+# import json
+#
+# with open("../dataset/rag_output.json") as fp:
+#     rag_results = RAGResults.from_json(fp.read())
+#
+# evaluator = RAGChecker(
+#     extractor_name="openai/gpt-5.1",
+#     checker_name="openai/gpt-5.1",
+#     batch_size_extractor=32,
+#     batch_size_checker=32
+# )
+#
+# evaluator.evaluate(rag_results, all_metrics)
+# print(rag_results)
+#
+# output_file = "../dataset/rag_evaluation_results.json"
+# with open(output_file, "w", encoding="utf-8") as f:
+#     json.dump(rag_results.to_dict(), f, ensure_ascii=False, indent=4)
 
-from ragchecker import RAGResults, RAGChecker
-from ragchecker.metrics import all_metrics
+
 import json
+import re
 
-with open("../dataset/rag_output.json") as fp:
-    rag_results = RAGResults.from_json(fp.read())
 
-evaluator = RAGChecker(
-    extractor_name="openai/gpt-5.1",
-    checker_name="openai/gpt-5.1",
-    batch_size_extractor=32,
-    batch_size_checker=32
-)
+def compute_accuracy(data):
+    """
+    Liczy accuracy dla ChatGPT na podstawie formatu:
+    {
+        "results": [
+            {
+                "query_id": ...,
+                "query": "...",
+                "gt_answer": "B",
+                "response": "Odpowiedź ... B. ...",
+                ...
+            },
+            ...
+        ]
+    }
+    """
+    results = data["results"]
+    correct = 0
+    total = len(results)
 
-evaluator.evaluate(rag_results, all_metrics)
-print(rag_results)
+    for item in results:
+        gt = item["gt_answer"].strip().upper()
 
-output_file = "../dataset/rag_evaluation_results.json"
-with open(output_file, "w", encoding="utf-8") as f:
-    json.dump(rag_results.to_dict(), f, ensure_ascii=False, indent=4)
+        # Wyciągamy pierwszą literę odpowiedzi z modelu (np. "B" z "B. komisji lekarskiej...")
+        match = re.search(r'\b([A-E])\b', item["response"].upper())
+        if match:
+            pred = match.group(1)
+        else:
+            # Jeśli nie uda się znaleźć litery w odpowiedzi, traktujemy jako błędną
+            pred = None
+
+        if pred == gt:
+            correct += 1
+
+    accuracy = correct / total * 100 if total > 0 else 0
+    return accuracy
+
+# Przykład użycia:
+with open("../dataset/rag_output.json") as f:
+    data = json.load(f)
+acc = compute_accuracy(data)
+print(f"Accuracy ChatGPT: {acc:.2f}%")
